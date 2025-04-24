@@ -1,10 +1,11 @@
 ---
-title: "Lab 02: Distances and the Border Zone"
+title: "Lab 10: Distances and the Border Zone"
+
 subtitle: 'Ecosystem Science and Sustainability 523c'
+
 author:
   - name: Neva Morgan
     email: neva.morgan@colostate.edu
-format: html
 ---
 
 This is a Quarto website.
