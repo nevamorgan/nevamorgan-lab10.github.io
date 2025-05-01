@@ -1,24 +1,86 @@
 ---
 title: "Lab 10: Distances and the Border Zone"
 
-subtitle: 'Ecosystem Science and Sustainability 523c'
+subtitle: 'Ecosystem Science and Sustainability 330'
 
 author:
   - name: Neva Morgan
     email: neva.morgan@colostate.edu
 ---
 
-This is a Quarto website.
+### **Objectives**
 
-To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
+1.  In this lab we will explore the properties of sf, sfc, and sfg features & objects; how they are stored; and issues related to distance calculation and coordinate transformation.
+
+2.  We will continue to build on our data wrangling and data visualization skills; as well as document preparation via Quarto and GitHub.
+
+#### Loading the libraries:
 
 ```{r}
-1 + 1
+# spatial data science
+library(tidyverse)
+library(sf)
+library(units)
+
+# Visualization
+library(gghighlight)
+library(ggrepel)
+library(knitr)
 ```
 
-3.  
+## **Question 1:**
+
+For this lab we need three (3) datasets.
+
+Spatial boundaries of continental USA states (1.1) Boundaries of Canada, Mexico and the United States (1.2) All USA cites (1.3)
+
+### **1.1 Define a Projection**
 
 ```{r}
+eqdc <- '+proj=eqdc +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs'
+```
 
+[Meaning of this beginning code:]{.underline}
+
++proj=eqdc → Equidistant Conic projection
+
++lat_0=40 → Latitude of the projection’s center (40°N)
+
++lon_0=-96 → Central meridian (96°W)
+
++lat_1=20 → First standard parallel (20°N)
+
++lat_2=60 → Second standard parallel (60°N)
+
++x_0=0 → False easting (0 meters)
+
++y_0=0 → False northing (0 meters)
+
++datum=NAD83 → Uses the North American Datum 1983 (NAD83)
+
++units=m → Units are in meters
+
++no_defs → No additional default parameters from PROJ’s database
+
+### **1.2 - Get USA state boundaries**
+
+```{r}
+remotes::install_github("mikejohnson51/AOI")
+
+library(AOI)
+
+remotes::install_github("ropensci/USAboundaries")
+remotes::install_github("ropensci/USAboundariesData")
+remotes::install_github("ropenscilabs/rnaturalearthdata")
+
+# Getting USA Boundaries:
+
+us <- aoi_get(state = 'conus') |>
+  glimpse()
+```
+
+### **1.3 - Get country boundaries for Mexico, the United States of America, and Canada**
+
+```{r}
 
 ```
