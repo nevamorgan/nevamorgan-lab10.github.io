@@ -26,6 +26,8 @@ library(units)
 library(gghighlight)
 library(ggrepel)
 library(knitr)
+
+#Loaded AOI later with Question 1.2!
 ```
 
 ## **Question 1:**
@@ -77,10 +79,22 @@ remotes::install_github("ropenscilabs/rnaturalearthdata")
 
 us <- aoi_get(state = 'conus') |>
   glimpse()
+
+
+# Setting it to the projection we made earlier:
+
+us_eqdc <- st_transform(us, crs = eqdc)
+
+st_crs(us_eqdc)
 ```
+
+Based on the glimpse of what the us boundary contains from the AOI , we can see that this data needed to be changed to reflex the earlier rpojection we made for mapping in North America. By using st_transform and st_crs, I was able to form the data, to reflect the boundaries we want it to be projected into!
 
 ### **1.3 - Get country boundaries for Mexico, the United States of America, and Canada**
 
 ```{r}
+
+bound <- aoi_get(country = c("MX", "CA", "USA"))
+
 
 ```
