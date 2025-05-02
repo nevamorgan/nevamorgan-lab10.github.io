@@ -13,6 +13,7 @@ website:
 format:
   html:
     self-contained: true
+    df-print: paged
 
 editor: visual
 

@@ -36,7 +36,7 @@ For this lab we need three (3) datasets.
 
 Spatial boundaries of continental USA states (1.1) Boundaries of Canada, Mexico and the United States (1.2) All USA cites (1.3)
 
-### **1.1 Define a Projection**
+### **1.1 - Define a Projection**
 
 ```{r}
 eqdc <- '+proj=eqdc +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs'
@@ -96,5 +96,386 @@ Based on the glimpse of what the us boundary contains from the AOI , we can see 
 
 bound <- aoi_get(country = c("MX", "CA", "USA"))
 
+# Setting it to the projection we made earlier:
+
+b_eqdc <- st_transform(bound, crs = eqdc)
+
+st_crs(b_eqdc)
+```
+Now both the us map and the boundaries of selected states (Mexico, Canada, and US) boundaries are all projected within the EQDC layout!
+
+### **1.4 - Get city locations from the CSV file**
+```{r}
+uscities <- read_csv("data/uscities.csv")
+```
+This data set contains an extensive representation of US cities, including their latitude, longitudes, population of the cities, along with key identifiers of each city, county, and zip codes!!!
+
+
+```{r}
+# Setting uscities data frame to a spatial object!
+
+uscities_sf <- st_as_sf(uscities, coords = c("lng", "lat"), crs = 4326) |> 
+  st_transform(crs = eqdc)
+
+# Removing unwanted cities:
+
+uscities_sf <- uscities_sf |>
+  filter(!state_id %in% c("AK", "HI", "PR"))
+
+
+st_crs(uscities_sf)
+glimpse(uscities_sf)
+```
+
+## **Question 2:**
+
+Here we will focus on calculating the distance of each USA city to (1) the national border (2) the nearest state border (3) the Mexican border and (4) the Canadian border.
+
+
+### **2.1 - Distance to USA Border (coastline or national) (km)**
+
+```{r}
+# ONE GEOMETRY!
+union_us <- us_eqdc |>
+  st_union()
+
+# Converting to a MULTILINESTRING
+us_border <- 
+  st_cast(union_us, "MULTILINESTRING")
+
+#City to border Distance:
+bor_dist <- 
+  st_distance(uscities_sf, us_border)
+
+#CONVERSION TIME (km) and UNLISTING!
+uscities_sf$bor_dist_km <-
+  set_units(bor_dist, "km") |>
+  drop_units()
+
+#Flextabl of five cities farthest from state border:
+
+library(flextable)
+
+top5_c <- uscities_sf |>
+  st_drop_geometry() |>
+  arrange(desc(bor_dist_km)) |>
+  select(city, state_name, bor_dist_km) |>
+  slice_head(n = 5)
+
+flextable(as.data.frame(top5_c))
 
 ```
+
+### **2.2 - Distance to States (km)**
+Difference in this problem is we don't want to unify in the beginning but rather build the boundaries as their own feature:
+
+```{r}
+# Converting polygons to the MULTILINESTRING:
+
+states <- st_cast(us_eqdc, "MULTILINESTRING")
+
+# Calculating city distance to nearest state border:
+
+s_bor_dist <- 
+  st_distance(uscities_sf, states)
+
+# CONVERTING TO KM:
+uscities_sf$s_dist_km <-
+  apply(s_bor_dist, 1, min) |>
+  set_units("km") |>
+  drop_units()
+  
+# Making a flextable of five fartherst city to state boundary distance
+
+top5_s <- uscities_sf |>
+  st_drop_geometry() |>
+  arrange(desc(s_dist_km)) |>
+  select(city, state_name, s_dist_km) |>
+  slice_head(n = 5)
+
+flextable(as.data.frame(top5_s))
+
+```
+
+### **2.3 - Distance to Mexico (km)**
+
+```{r}
+# Getting Mexico from country boundaries:
+
+mex <- b_eqdc |>
+  filter(admin == "Mexico")
+
+# Converting to a MULTILINESTRING
+
+mex_bor <- st_cast(mex, "MULTILINESTRING")
+
+# Calculating city distance to nearest state border:
+
+mex_bor_dist <- 
+  st_distance(uscities_sf, mex_bor)
+
+# CONVERTING TO KM:
+uscities_sf$mex_dist_km <-
+  apply(mex_bor_dist, 1, min) |>
+  set_units("km") |>
+  drop_units()
+  
+# Making a flextable of five fartherst city to state boundary distance
+
+top5_mex <- uscities_sf |>
+  st_drop_geometry() |>
+  arrange(desc(mex_dist_km)) |>
+  select(city, state_name, mex_dist_km) |>
+  slice_head(n = 5)
+
+flextable(as.data.frame(top5_mex))
+
+```
+
+```{r}
+# Making Canada from boundaries list
+can <- b_eqdc |>
+  filter(admin == "Canada")
+
+# Converting to a MULTILINESTRING:
+can_bor <- st_cast(can, "MULTILINESTRING")
+
+# Calculating distances:
+can_bor_dist <- st_distance(uscities_sf, can_bor)
+
+# Converting to km:
+uscities_sf$can_dist_km <-
+  apply(can_bor_dist, 1, min) |>
+  set_units("km") |>
+  drop_units()
+
+# Making a flexttable of the five farthest cities to Canada:
+top5_can <- uscities_sf |>
+  st_drop_geometry() |>
+  arrange(desc(can_dist_km)) |>
+  select(city, state_name, can_dist_km) |>
+  slice_head(n = 5)
+
+flextable(as.data.frame(top5_can))
+
+```
+
+## **Question 3:**
+
+In this section we will focus on visualizing the distance data you calculated above. You will be using ggplot to make your maps, ggrepl to label significant features, and gghighlight to emphasize important criteria.
+
+
+### **3.1 - Data**
+
+```{r}
+# Finding the top ten most populated cities:
+
+top10 <- uscities_sf |>
+  arrange(desc(population)) |>
+  slice_head(n = 10)
+
+# Three Continents Map:
+
+ggplot() +
+  geom_sf(data = b_eqdc, fill = "lightgrey", color = "black", lty = "solid", size = 0.3) +
+  geom_sf(data = us_eqdc, fill = NA, color = "black", lty = "dashed", size = 0.5) +
+  geom_sf(data = states, color = "grey60", lty = "dotted", size = 0.3) +
+  geom_sf(data = top10, aes(size = population), color = "darkorange1", alpha = 0.6) +
+  ggrepel::geom_label_repel(data = top10, aes(geometry = geometry, label = city), stat = "sf_coordinates", size = 3, max.overlaps = 10) +
+  theme_linedraw() +
+  labs(title = "Top 10 Populated US Cities Including Boundaries",
+       size = "Population",
+       x = "Longitude",
+       y = "Latitude",
+       caption = "ESS330 - Lab 10 - Neva Morgan")
+
+```
+
+### **3.2 - City Distance from the Border**
+
+```{r}
+# Finding the 5 farthest cities
+top5_bor <- uscities_sf |>
+  arrange(desc(bor_dist_km)) |>
+  slice_head(n = 5)
+
+# Plotting it out:
+
+ggplot() +
+  geom_sf(data = b_eqdc, fill = "white", color = "black", size = 0.2) +
+  geom_sf(data = uscities_sf, aes(color = bor_dist_km), size = 1) +
+  scale_color_viridis_c(name = "Distance to US Border (km)", option = "C") +
+  geom_sf(data = top5_bor, color = "red", size = 2) +
+  ggrepel::geom_label_repel(data = top5_bor,
+                            aes(geometry = geometry, label = city),
+                            stat = "sf_coordinates", size = 3) +
+  theme_linedraw() +
+  labs(title = "Top 5 Cities Furthest from US Border, Colored Accordingly",
+       x = "Longitude",
+       y = "Latitude",
+       caption = "ESS330 - Lab 10 - Neva Morgan")
+
+```
+
+### **3.3 - City Distance from Nearest State**
+
+```{r}
+# Finding furthers five cities from state borders:
+
+top5_state <- uscities_sf |>
+  arrange(desc(s_dist_km)) |>
+  slice_head(n = 5)
+
+# Plotting:
+
+ggplot() +
+  geom_sf(data = b_eqdc, fill = "white", color = "black", size = 0.2) +
+  geom_sf(data = uscities_sf, aes(color = s_dist_km), size = 1) +
+  scale_color_viridis_c(name = "Distance to Nearest State Border (km)", option = "D") +
+  geom_sf(data = top5_state, color = "red", size = 2) +
+  ggrepel::geom_label_repel(data = top5_state,                         aes(geometry = geometry, label = city),stat = "sf_coordinates", size = 3) +
+  theme_linedraw() +
+  labs(title = "US Cities Furthest from Inner-State Borders",
+       x = "Longitude",
+       y = "Latitude",
+       caption = "ESS330 - Lab 10 - Neva Morgan")
+
+```
+
+### **3.4 - Equidistance Boundary from Mexico and Canada**
+
+```{r}
+# Create new variable: absolute difference
+uscities_sf <- uscities_sf |>
+  mutate(diff_can_mex = abs(can_dist_km - mex_dist_km))
+
+# Filter cities roughly equidistant (±100 km)
+equal_dist_cities <- uscities_sf |>
+  filter(diff_can_mex <= 100)
+
+# Top 5 populous cities in this zone
+top5_equal_dist <- equal_dist_cities |>
+  arrange(desc(population)) |>
+  slice_head(n = 5)
+
+# Plotting:
+ggplot() +
+  geom_sf(data = b_eqdc, fill = "white", color = "black", size = 0.2) +
+  geom_sf(data = uscities_sf, color = "lightgray", size = 0.5) +
+  geom_sf(data = equal_dist_cities, aes(color = diff_can_mex), size = 1) +
+  scale_color_viridis_c(name = "Abs. Diff: Canada vs Mexico (km)", option = "B") +
+  gghighlight::gghighlight(diff_can_mex <= 100, use_direct_label = FALSE) +
+  geom_sf(data = top5_equal_dist, color = "red", size = 2) +
+  ggrepel::geom_label_repel(data = top5_equal_dist,
+                            aes(geometry = geometry, label = city),
+                            stat = "sf_coordinates", size = 3) +
+  theme_linedraw() +
+  labs(title = "US Cities Equidistant to Mexico and Canada Boundaries (±100 km)",
+       x = "Longitude",
+       y = "Latitude",
+       caption = "ESS330 - Lab 10 - Neva Morgan")
+
+
+```
+
+## **Question 4:**
+
+**Real World Application**
+Recently, Federal Agencies have claimed basic constitutional rights protected by the Fourth Amendment (protecting Americans from random and arbitrary stops and searches) do not apply fully at our borders (see Portland). For example, federal authorities do not need a warrant or suspicion of wrongdoing to justify conducting what courts have called a “routine search,” such as searching luggage or a vehicle. Specifically, federal regulations give U.S. Customs and Border Protection (CBP) authority to operate within 100 miles of any U.S. “external boundary”. Further information can be found at this ACLU article.
+
+### **4.1 - Quantifying Border Zone:**
+
+```{r}
+# Creating 100-mile (160km) buffer around US Border:
+
+buffer <- st_buffer(us_border, dist = set_units(160, "km"))
+
+# Filter Cities within Buffer:
+cities_buff <- uscities_sf[
+  st_intersects(uscities_sf, buffer, sparse = FALSE), ]
+
+# Total Pop in 100 mile Buffer
+tot_pop_buff <- sum(cities_buff$population)
+# 216,039,700 million people!
+
+
+# Total Pop in all US Cities:
+tot_pop_us <- sum(uscities_sf$population)
+# 396,228,558 million people
+
+
+# Percentage of people in 100 mile buffer:
+per_pop_buff <- (tot_pop_buff / tot_pop_us) * 100
+# 54.524 % of people live in 100 mile buffer around us border! WOW
+
+
+# Summary table:
+
+border_buff_sum <- data.frame(
+  Number_of_Cities = nrow(cities_buff),
+  Total_Population_in_Buffer = tot_pop_buff,
+  Percentage_of_Population_in_Buffer = per_pop_buff
+)
+
+
+border_buff_sum
+```
+
+### **4.2 - Mapping Border Zone**
+
+```{r}
+# Finding top ten most populated cities within our 100 mile buffer:
+top10_buff <- cities_buff |>
+  arrange(desc(population)) |>
+  slice_head(n = 10)
+
+# Plotting:
+ggplot() +
+  geom_sf(data = b_eqdc, fill = "white", color = "black", size = 0.2) +
+  geom_sf(data = top10_buff, aes(color = population), size = 3) +
+  scale_color_gradient(low = "yellow", high = "darkred", name = "Population",
+                       limits = c(min(top10_buff$population), max(top10_buff$population))) +
+  ggrepel::geom_label_repel(data = top10_buff,
+                            aes(geometry = geometry, label = city),
+                            stat = "sf_coordinates",
+                            size = 3,
+                            max.overlaps = 100) +
+  theme_linedraw() +
+  labs(title = "Top 10 Most Populated Cities within 100 Miles of US Nation Border",
+       x = "Longitude",
+       y = "Latitude",
+       caption = "ESS330 - Lab 10 - Neva Morgan")
+
+
+
+```
+
+### **4.3  - Mapping the Most Populous City in each state within the Danger Zone**
+
+```{r}
+#Finding most populated within 100 mile buffer zone:
+most_pop_cities <- cities_buff |>
+  group_by(state_name) |>
+slice_max(population, n = 1) |>
+  ungroup()
+
+# PLOTTING:
+ggplot() +
+  geom_sf(data = b_eqdc, fill = "white", color = "black", size = 0.2) +
+  geom_sf(data = most_pop_cities, aes(color = population), size = 3) +
+  scale_color_gradient(low = "yellow", high = "darkred", name = "Population",
+                       limits = c(min(most_pop_cities$population), max(most_pop_cities$population))) +
+  ggrepel::geom_label_repel(data = most_pop_cities,
+                            aes(geometry = geometry, label = city),
+                            stat = "sf_coordinates",
+                            size = 3,
+                            max.overlaps = 100) +
+  theme_linedraw() +
+  labs(title = "Top 10 Most Populated Cities within 100 Miles of US Nation Border",
+       x = "Longitude",
+       y = "Latitude",
+       caption = "ESS330 - Lab 10 - Neva Morgan")
+```
+
+
+
